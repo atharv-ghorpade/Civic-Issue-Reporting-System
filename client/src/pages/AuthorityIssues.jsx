@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../services/api';
+import issueService from '../services/issueService';
 import { useAuth } from '../hooks/useAuth';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -8,21 +8,37 @@ export default function AuthorityIssues() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [issues, setIssues] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchIssues();
-  }, []);
-
-  const fetchIssues = () => {
-    api.get('/issues').then(res => {
-      const myIssues = res.data.filter(issue => issue.assignedTo === user.id);
-      setIssues(myIssues);
-    }).catch(err => console.error(err));
+  const fetchIssuesData = async () => {
+    try {
+      setLoading(true);
+      // Fetch ALL issues and filter for current authority as backend lacks role-specific /issues/my
+      const data = await issueService.getAllIssues();
+      const myData = Array.isArray(data) ? data.filter(i => i.assigned_to_id === user?.id) : [];
+      setIssues(myData);
+      setError(null);
+    } catch (err) {
+      console.error('Fetch Authority Issues Error:', err);
+      setError('Failed to load assigned issues.');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useEffect(() => {
+    if (user?.id) fetchIssuesData();
+  }, [user?.id, navigate]);
+
   const updateStatus = async (id, status) => {
-    await api.patch(`/issues/${id}`, { status });
-    fetchIssues();
+    try {
+      await issueService.updateIssueStatus(id, { status });
+      fetchIssuesData();
+    } catch (err) {
+      console.error('Update Status Error:', err);
+      alert('Failed to update status.');
+    }
   };
 
   const container = {
@@ -57,35 +73,47 @@ export default function AuthorityIssues() {
                 <th className="py-4 px-6 font-bold text-right">Actions</th>
               </tr>
             </thead>
-            {issues.length > 0 ? (
+            {loading ? (
+              <tbody>
+                <tr>
+                  <td colSpan="6" className="py-16 text-center text-gray-500 font-medium">Loading issues...</td>
+                </tr>
+              </tbody>
+            ) : error ? (
+              <tbody>
+                <tr>
+                  <td colSpan="6" className="py-16 text-center text-red-500 font-medium">{error}</td>
+                </tr>
+              </tbody>
+            ) : issues.length > 0 ? (
               <motion.tbody variants={container} initial="hidden" animate="show">
                 {issues.map(issue => (
-                  <motion.tr variants={itemRow} key={issue.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="py-5 px-6 font-bold text-gray-800">{issue.title}</td>
-                    <td className="py-5 px-6 text-sm text-gray-600 font-medium">{issue.category}</td>
-                    <td className="py-5 px-6 text-sm text-gray-500 truncate max-w-[150px]">{issue.location}</td>
+                   <motion.tr variants={itemRow} key={issue.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                    <td className="py-5 px-6 font-bold text-gray-800">{issue?.title}</td>
+                    <td className="py-5 px-6 text-sm text-gray-600 font-medium">{issue?.category}</td>
+                    <td className="py-5 px-6 text-sm text-gray-500 truncate max-w-[150px]">{issue?.location}</td>
                     <td className="py-5 px-6">
-                       <span className={`text-xs font-bold px-3 py-1 rounded-lg ${issue.priority === 'High' || issue.priority === 'Critical' ? 'bg-red-100 text-danger' : 'bg-blue-100 text-primary'}`}>
-                          {issue.priority}
+                       <span className={`text-xs font-bold px-3 py-1 rounded-lg ${issue?.priority === 'High' || issue?.priority === 'Critical' ? 'bg-red-100 text-danger' : 'bg-blue-100 text-primary'}`}>
+                          {issue?.priority}
                        </span>
                     </td>
                     <td className="py-5 px-6">
-                      <span className={`text-xs font-bold px-3 py-1 rounded-lg uppercase ${issue.status === 'resolved' ? 'bg-green-100 text-success' : issue.status === 'in progress' ? 'bg-orange-100 text-warning' : 'bg-gray-100 text-gray-600'}`}>
-                        {issue.status}
+                      <span className={`text-xs font-bold px-3 py-1 rounded-lg uppercase ${issue?.status === 'resolved' ? 'bg-green-100 text-success' : issue?.status === 'in-progress' ? 'bg-orange-100 text-warning' : 'bg-gray-100 text-gray-600'}`}>
+                        {issue?.status}
                       </span>
                     </td>
                     <td className="py-5 px-6 text-right w-64">
                       <div className="flex justify-end gap-2">
-                        {issue.status === 'assigned' && (
+                        {(issue?.status === 'assigned' || issue?.status === 'open') && (
                           <motion.button 
                             whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                            onClick={() => updateStatus(issue.id, 'in progress')} 
+                            onClick={() => updateStatus(issue.id, 'in-progress')} 
                             className="text-xs font-bold px-3 py-2 rounded-lg bg-warning text-white shadow-sm hover:bg-opacity-90"
                           >
                             Start Work
                           </motion.button>
                         )}
-                        {issue.status === 'in progress' && (
+                        {issue?.status === 'in-progress' && (
                           <motion.button 
                             whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                             onClick={() => updateStatus(issue.id, 'resolved')} 

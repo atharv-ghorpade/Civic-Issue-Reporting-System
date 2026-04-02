@@ -1,0 +1,12 @@
+# Backend
+server/venv/
+__pycache__/
+*.pyc
+.env
+
+# Frontend
+client/node_modules/
+client/dist/
+
+# General
+.env

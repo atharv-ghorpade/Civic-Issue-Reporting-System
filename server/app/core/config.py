@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = os.getenv("API_STR", "/api/v1")
     
     # DATABASE
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./sql_app.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:root@localhost:5432/civic-issues")
     
     # SECURITY
     SECRET_KEY: str = os.getenv("SECRET_KEY", "YOUR_SUPER_SECRET_KEY_HERE_FOR_LOCAL_DEV")

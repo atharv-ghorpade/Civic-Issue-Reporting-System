@@ -9,13 +9,21 @@ import IssueDetail from '../pages/IssueDetail';
 import Notifications from '../pages/Notifications';
 import AdminDashboard from '../pages/AdminDashboard';
 import Reports from '../pages/Reports';
-import Analytics from '../pages/Analytics';
 import Settings from '../pages/Settings';
 import AuthorityDashboard from '../pages/AuthorityDashboard';
 import AuthorityIssues from '../pages/AuthorityIssues';
+import AdminUsers from '../pages/AdminUsers';
+import TestDashboard from '../pages/TestDashboard';
 
 function PrivateRoute({ children, role }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-background-main">
+       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-accent"></div>
+    </div>
+  );
+
   if (!user) return <Navigate to="/" />;
   if (role && user.role !== role) {
     if (user.role === 'admin') return <Navigate to="/admin-dashboard" />;
@@ -39,13 +47,16 @@ export default function AppRoutes() {
       
       {/* Admin Routes */}
       <Route path="/admin-dashboard" element={<PrivateRoute role="admin"><AdminDashboard /></PrivateRoute>} />
+      <Route path="/admin-users" element={<PrivateRoute role="admin"><AdminUsers /></PrivateRoute>} />
       <Route path="/reports" element={<PrivateRoute role="admin"><Reports /></PrivateRoute>} />
-      <Route path="/analytics" element={<PrivateRoute role="admin"><Analytics /></PrivateRoute>} />
       <Route path="/settings" element={<PrivateRoute role="admin"><Settings /></PrivateRoute>} />
 
       {/* Authority Routes */}
       <Route path="/authority-dashboard" element={<PrivateRoute role="authority"><AuthorityDashboard /></PrivateRoute>} />
       <Route path="/authority-issues" element={<PrivateRoute role="authority"><AuthorityIssues /></PrivateRoute>} />
+      
+      {/* Test Route */}
+      <Route path="/test-dashboard" element={<PrivateRoute><TestDashboard /></PrivateRoute>} />
     </Routes>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import api from '../services/api';
+import issueService from '../services/issueService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,10 +19,11 @@ export default function SubmitIssue() {
     setError('');
     setLoading(true);
     try {
-      await api.post('/issues', formData);
+      await issueService.createIssue(formData);
       setSuccess(true);
       setTimeout(() => navigate('/user-dashboard'), 2000);
     } catch (err) {
+      console.error('Submit Issue Error:', err);
       setError('Failed to submit the issue. Please try again.');
       setLoading(false);
     }
@@ -36,7 +37,7 @@ export default function SubmitIssue() {
       <AnimatePresence>
         {error && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="bg-red-50 text-danger p-4 rounded-xl font-medium mb-6">
-            ⚠️ {error}
+            ⚠️ {typeof error === 'string' ? error : (error?.message || JSON.stringify(error) || "Submission failed")}
           </motion.div>
         )}
         {success && (

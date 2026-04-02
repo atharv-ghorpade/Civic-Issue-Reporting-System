@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import issueService from '../services/issueService';
+import authService from '../services/authService';
 import api from '../services/api';
 import { motion } from 'framer-motion';
 
@@ -9,27 +11,48 @@ export default function Reports() {
   const [filterCat, setFilterCat] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
   const [assignments, setAssignments] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchIssues();
-    api.get('/authorities').then(res => setAuthorities(res.data)).catch(err => console.error(err));
-  }, []);
-
-  const fetchIssues = () => {
-    api.get('/issues').then(res => setIssues(res.data));
+  const fetchIssuesData = async () => {
+    try {
+      setLoading(true);
+      const data = await issueService.getAllIssues();
+      setIssues(Array.isArray(data) ? data : []);
+      setError(null);
+    } catch (err) {
+      console.error('Fetch Admin Issues Error:', err);
+      setError('Failed to load issues for reporting.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const assignAuthority = async (id) => {
-    const authorityId = parseInt(assignments[id]);
-    if (!authorityId) return;
-    const authority = authorities.find(a => a.id === authorityId);
+  useEffect(() => {
+    fetchIssuesData();
+    // Fetch all users and filter for authorities
+    api.get('/admin/users')
+      .then(res => {
+        const auths = Array.isArray(res.data) ? res.data.filter(u => u.role === 'authority') : [];
+        setAuthorities(auths);
+      })
+      .catch(err => console.error('Authorities fetch error:', err));
+  }, []);
+
+  const assignAuthority = async (issueId) => {
+    const authId = assignments[issueId];
+    if (!authId) return alert("Please select an authority first.");
     
-    await api.patch(`/issues/${id}`, { 
-      status: 'assigned', 
-      assignedTo: authority.id, 
-      assignedName: authority.name 
-    });
-    fetchIssues();
+    try {
+      await issueService.assignIssue(issueId, { 
+        assigned_to: parseInt(authId) 
+      });
+      fetchIssuesData(); // Refresh list to show new assignment
+      setAssignments({ ...assignments, [issueId]: '' }); // Clear select
+    } catch (err) {
+      console.error('Assign Authority Error:', err);
+      alert('Failed to assign authority.');
+    }
   };
 
   const filtered = issues.filter(i => {
@@ -89,24 +112,26 @@ export default function Reports() {
                 <th className="py-4 px-6 font-bold text-right">Actions</th>
               </tr>
             </thead>
-            {filtered.length > 0 ? (
+            {loading ? (
+              <tbody><tr><td colSpan="5" className="py-16 text-center text-gray-500 font-medium">Loading reports...</td></tr></tbody>
+            ) : error ? (
+              <tbody><tr><td colSpan="5" className="py-16 text-center text-red-500 font-medium">{typeof error === 'string' ? error : (error?.message || "Failed to load reports")}</td></tr></tbody>
+            ) : filtered.length > 0 ? (
               <motion.tbody variants={container} initial="hidden" animate="show">
                 {filtered.map(issue => (
                   <motion.tr variants={itemRow} key={issue.id} className="border-b border-gray-50 hover:bg-red-50/30 transition-colors">
-                    <td className="py-4 px-6 font-bold text-gray-800">{issue.title}</td>
-                    <td className="py-4 px-6 text-sm font-medium text-gray-600">{issue.category}</td>
+                    <td className="py-4 px-6 font-bold text-gray-800">{issue?.title}</td>
+                    <td className="py-4 px-6 text-sm font-medium text-gray-600">{issue?.category}</td>
                     <td className="py-4 px-6">
-                      <span className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-lg uppercase">{issue.status}</span>
+                      <span className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-lg uppercase">{issue?.status}</span>
                     </td>
-                    <td className="py-4 px-6 text-sm">
-                      {issue.assignedName ? (
-                        <span className="text-gray-700 font-bold">{issue.assignedName}</span>
-                      ) : (
-                        <span className="text-gray-400 italic">Unassigned</span>
+                    <td className="py-4 px-6 text-sm font-bold text-gray-700">
+                      {authorities.find(a => a.id === issue.assigned_to_id)?.full_name || (
+                        <span className="text-gray-400 font-normal italic">Unassigned</span>
                       )}
                     </td>
                     <td className="py-4 px-6 text-right">
-                      {issue.status === 'submitted' && (
+                      {(issue?.status === 'submitted' || issue?.status === 'open') && (
                         <div className="flex justify-end items-center space-x-2">
                           <select 
                             className="text-xs p-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-accent font-medium bg-white"
@@ -114,8 +139,8 @@ export default function Reports() {
                             onChange={e => setAssignments({...assignments, [issue.id]: e.target.value})}
                           >
                             <option value="" disabled>Select Authority</option>
-                            {authorities.map(a => (
-                              <option key={a.id} value={a.id}>{a.name}</option>
+                            {authorities?.map(a => (
+                              <option key={a.id} value={a.id}>{a.full_name}</option>
                             ))}
                           </select>
                           <motion.button 

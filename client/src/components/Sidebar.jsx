@@ -14,8 +14,8 @@ export default function Sidebar() {
 
   const adminLinks = [
     { path: '/admin-dashboard', label: 'Dashboard' },
+    { path: '/admin-users', label: 'User Management' },
     { path: '/reports', label: 'Reports' },
-    { path: '/analytics', label: 'Analytics' },
     { path: '/settings', label: 'Settings' }
   ];
 
@@ -28,7 +28,7 @@ export default function Sidebar() {
                 user?.role === 'authority' ? authorityLinks : citizenLinks;
 
   return (
-    <div className="w-64 bg-primary text-white min-h-screen p-5 flex flex-col shadow-2xl">
+    <div className="w-64 bg-primary text-white h-screen p-6 flex flex-col shadow-2xl relative z-20">
       <div className="mb-8 flex items-center gap-2">
         <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center font-bold">F</div>
         <h1 className="text-2xl font-bold tracking-wide">FixMyCity</h1>

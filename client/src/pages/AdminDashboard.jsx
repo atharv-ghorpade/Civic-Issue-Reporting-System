@@ -1,29 +1,54 @@
 import { useState, useEffect } from 'react';
-import api from '../services/api';
+import { useNavigate, Link } from 'react-router-dom';
+import adminService from '../services/adminService';
+import issueService from '../services/issueService';
 import { motion } from 'framer-motion';
 
 export default function AdminDashboard() {
-  const [issues, setIssues] = useState([]);
+  const navigate = useNavigate();
+  const [stats, setStats] = useState({ total: 0, open: 0, in_progress: 0, resolved: 0 });
+  const [recentIssues, setRecentIssues] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.get('/issues').then(res => setIssues(res.data)).catch(err => console.error(err));
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [statsData, issuesData] = await Promise.all([
+          adminService.getStats(),
+          issueService.getAllIssues()
+        ]);
+        setStats(statsData);
+        setRecentIssues(Array.isArray(issuesData) ? issuesData.slice(0, 5) : []);
+        setError(null);
+      } catch (err) {
+        console.error('Fetch Admin Dashboard Data Error:', err);
+        setError('Failed to load dashboard data.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
-  const total = issues.length;
-  const open = issues.filter(i => i.status === 'submitted').length;
-  const inProgress = issues.filter(i => i.status === 'in progress').length;
-  const resolved = issues.filter(i => i.status === 'resolved').length;
-
   const statCards = [
-    { label: 'Total Issues', value: total, color: 'text-primary' },
-    { label: 'Open', value: open, color: 'text-danger' },
-    { label: 'In Progress', value: inProgress, color: 'text-warning' },
-    { label: 'Resolved', value: resolved, color: 'text-success' },
+    { label: 'Total Issues', value: stats.total, color: 'text-primary' },
+    { label: 'Open', value: stats.open, color: 'text-danger' },
+    { label: 'In Progress', value: stats.in_progress, color: 'text-warning' },
+    { label: 'Resolved', value: stats.resolved, color: 'text-success' },
   ];
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-primary">Admin Dashboard</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-primary">Admin Dashboard</h1>
+        <Link to="/admin-users">
+          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="bg-accent text-white px-6 py-2 rounded-xl font-bold text-sm shadow-md">
+             Manage Users
+          </motion.button>
+        </Link>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {statCards.map((stat, i) => (
@@ -34,29 +59,41 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      <div className="bg-white p-6 rounded-2xl shadow-sm">
-        <h2 className="text-xl font-bold text-primary mb-6">Recent Issues</h2>
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <h2 className="text-xl font-bold text-primary mb-6">Recent Reports</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-gray-200 text-gray-500 text-sm">
-                <th className="pb-3 font-semibold">Title</th>
-                <th className="pb-3 font-semibold">Category</th>
-                <th className="pb-3 font-semibold">Status</th>
-                <th className="pb-3 font-semibold">Date</th>
+              <tr className="border-b border-gray-200 text-gray-500 text-[10px] font-bold uppercase tracking-wider">
+                <th className="pb-3 px-2">Title</th>
+                <th className="pb-3 px-2">Category</th>
+                <th className="pb-3 px-2">Status</th>
+                <th className="pb-3 px-2">Date</th>
+                <th className="pb-3 px-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {issues.slice(0, 5).map(issue => (
-                <tr key={issue.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                  <td className="py-4 font-medium text-gray-800">{issue.title}</td>
-                  <td className="py-4 text-sm">{issue.category}</td>
-                  <td className="py-4">
-                    <span className="text-xs font-bold bg-gray-100 px-2 py-1 rounded-lg uppercase">{issue.status}</span>
-                  </td>
-                  <td className="py-4 text-sm text-gray-500">{new Date(issue.date).toLocaleDateString()}</td>
-                </tr>
-              ))}
+              {loading ? (
+                <tr><td colSpan="5" className="py-10 text-center text-gray-400">Loading data...</td></tr>
+              ) : error ? (
+                <tr><td colSpan="5" className="py-10 text-center text-red-500">{error}</td></tr>
+              ) : recentIssues.length === 0 ? (
+                <tr><td colSpan="5" className="py-10 text-center text-gray-500">No recent reports found.</td></tr>
+              ) : (
+                recentIssues.map(issue => (
+                  <tr key={issue.id} className="border-b border-gray-50 hover:bg-gray-50/30 transition-colors">
+                    <td className="py-4 px-2 font-bold text-gray-800 text-sm">{issue?.title}</td>
+                    <td className="py-4 px-2 text-xs text-gray-500 font-medium">{issue?.category}</td>
+                    <td className="py-4 px-2">
+                       <span className="text-[10px] font-bold bg-gray-100 px-2 py-0.5 rounded text-gray-400 uppercase">{issue?.status}</span>
+                    </td>
+                    <td className="py-4 px-2 text-[10px] font-medium text-gray-400">{issue?.created_at ? new Date(issue.created_at).toLocaleDateString() : 'N/A'}</td>
+                    <td className="py-4 px-2 text-right">
+                       <Link to={`/issue/${issue.id}`} className="text-[10px] font-bold text-accent uppercase hover:underline">View Detail</Link>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
