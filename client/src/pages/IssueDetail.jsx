@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import issueService from '../services/issueService';
 import commentService from '../services/commentService';
+import adminService from '../services/adminService';
 import { useAuth } from '../hooks/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -12,7 +13,9 @@ export default function IssueDetail() {
   const [history, setHistory] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ title: '', description: '' });
+  const [editForm, setEditForm] = useState({ title: '', description: '', priority: '', category: '' });
+  const [authorities, setAuthorities] = useState([]);
+  const [selectedAuthority, setSelectedAuthority] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { user } = useAuth();
@@ -23,7 +26,13 @@ export default function IssueDetail() {
         setLoading(true);
         const issueData = await issueService.getIssueById(id);
         setIssue(issueData);
-        setEditForm({ title: issueData.title, description: issueData.description });
+        setEditForm({ 
+          title: issueData.title, 
+          description: issueData.description,
+          priority: issueData.priority,
+          category: issueData.category
+        });
+        setSelectedAuthority(issueData.assigned_to_id || '');
         
         try {
           const [commentData, historyData] = await Promise.all([
@@ -32,6 +41,12 @@ export default function IssueDetail() {
           ]);
           setComments(Array.isArray(commentData) ? commentData : []);
           setHistory(Array.isArray(historyData) ? historyData : []);
+
+          if (user?.role === 'admin') {
+            const usersData = await adminService.getAllUsers();
+            const auths = Array.isArray(usersData) ? usersData.filter(u => u.role === 'authority') : [];
+            setAuthorities(auths);
+          }
         } catch (cErr) {
           console.error("Error fetching related data", cErr);
         }
@@ -45,7 +60,7 @@ export default function IssueDetail() {
       }
     };
     fetchData();
-  }, [id]);
+  }, [id, user?.role]);
 
   const handleComment = async () => {
     if(!newComment) return;
@@ -70,10 +85,19 @@ export default function IssueDetail() {
 
   const handleUpdate = async () => {
     try {
-      const updated = await issueService.updateIssue(id, editForm);
+      const updatePayload = { 
+        ...editForm, 
+        assigned_to_id: selectedAuthority ? parseInt(selectedAuthority) : null 
+      };
+      const updated = await issueService.updateIssue(id, updatePayload);
       setIssue(updated);
       setIsEditing(false);
+      
+      // Update history after change
+      const historyData = await issueService.getIssueHistory(id);
+      setHistory(Array.isArray(historyData) ? historyData : []);
     } catch (err) {
+      console.error("Update error:", err);
       alert("Failed to update issue");
     }
   };
@@ -148,6 +172,25 @@ export default function IssueDetail() {
               <p className="text-gray-500 font-medium">{issue.location} • {issue.created_at ? new Date(issue.created_at).toLocaleDateString() : 'N/A'}</p>
             </div>
             <div className="flex flex-col items-end">
+              {isEditing && user?.role === 'admin' && (
+                <div className="mb-2 w-full">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Status</label>
+                  <select 
+                    className="text-xs bg-gray-50 border border-gray-200 rounded p-1 w-full"
+                    value={issue.status}
+                    onChange={async (e) => {
+                      try {
+                        const updated = await issueService.updateIssueStatus(id, { status: e.target.value });
+                        setIssue(updated);
+                      } catch (err) { alert("Failed to update status"); }
+                    }}
+                  >
+                    <option value="open">Open</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                </div>
+              )}
               <span className={`px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wider ${issue.status==='resolved'?'bg-green-100 text-success':issue.status==='in-progress'?'bg-orange-100 text-warning':'bg-gray-100 text-gray-500'}`}>{issue.status}</span>
               {isEditing && (
                  <button onClick={handleUpdate} className="mt-2 text-xs font-bold bg-accent text-white px-3 py-1 rounded-lg">Save Changes</button>
@@ -162,11 +205,37 @@ export default function IssueDetail() {
             </div>
             <div>
               <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Priority</p>
-              <p className="font-semibold text-gray-800">{issue.priority}</p>
+              {isEditing && user?.role === 'admin' ? (
+                <select 
+                  className="p-1 border border-gray-200 rounded text-sm font-semibold text-gray-800"
+                  value={editForm.priority}
+                  onChange={e => setEditForm({...editForm, priority: e.target.value})}
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              ) : (
+                <p className="font-semibold text-gray-800">{issue.priority}</p>
+              )}
             </div>
             <div>
               <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Assigned Authority</p>
-              <p className="font-semibold text-gray-800">{issue.assignedName || <span className="text-gray-400 italic">Unassigned</span>}</p>
+              {isEditing && user?.role === 'admin' ? (
+                <select 
+                  className="p-1 border border-gray-200 rounded text-sm font-semibold text-gray-800 w-full"
+                  value={selectedAuthority}
+                  onChange={e => setSelectedAuthority(e.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {authorities.map(auth => (
+                    <option key={auth.id} value={auth.id}>{auth.full_name}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="font-semibold text-gray-800">{issue.assigned_to?.full_name || <span className="text-gray-400 italic">Unassigned</span>}</p>
+              )}
             </div>
           </div>
           

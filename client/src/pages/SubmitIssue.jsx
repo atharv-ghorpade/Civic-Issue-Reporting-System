@@ -5,10 +5,24 @@ import { useNavigate } from 'react-router-dom';
 
 export default function SubmitIssue() {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ title: '', category: 'Roads', description: '', priority: 'Medium', location: '' });
+  const [formData, setFormData] = useState({ title: '', category: 'Roads', description: '', location: '' });
+  const [image, setImage] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,7 +33,7 @@ export default function SubmitIssue() {
     setError('');
     setLoading(true);
     try {
-      await issueService.createIssue(formData);
+      await issueService.createIssue({ ...formData, image });
       setSuccess(true);
       setTimeout(() => navigate('/user-dashboard'), 2000);
     } catch (err) {
@@ -52,7 +66,7 @@ export default function SubmitIssue() {
           <label className="block text-sm font-bold text-gray-700 mb-2">Title <span className="text-danger">*</span></label>
           <input type="text" placeholder="E.g. Broken Streetlight" className="w-full p-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent transition-shadow" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
         </div>
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 gap-5">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">Category</label>
             <select className="w-full p-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent transition-shadow" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
@@ -60,15 +74,6 @@ export default function SubmitIssue() {
               <option>Utilities</option>
               <option>Sanitation</option>
               <option>Other</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Priority</label>
-            <select className="w-full p-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent transition-shadow" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value})}>
-              <option>Low</option>
-              <option>Medium</option>
-              <option>High</option>
-              <option>Critical</option>
             </select>
           </div>
         </div>
@@ -79,6 +84,26 @@ export default function SubmitIssue() {
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">Description <span className="text-danger">*</span></label>
           <textarea rows="4" placeholder="Describe the issue in detail..." className="w-full p-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent transition-shadow" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}></textarea>
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-2">Attach Image (Optional)</label>
+          <div className="flex items-center space-x-4">
+            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                <svg className="w-8 h-8 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                </svg>
+                <p className="text-sm text-gray-500">Click to upload issue image</p>
+              </div>
+              <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+            </label>
+            {preview && (
+              <div className="w-32 h-32 rounded-xl overflow-hidden border border-gray-200 flex-shrink-0">
+                <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+              </div>
+            )}
+          </div>
         </div>
         
         <motion.button 
