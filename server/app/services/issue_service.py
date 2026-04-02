@@ -64,9 +64,23 @@ class IssueService:
 
     @staticmethod
     def update_issue(db: Session, db_issue: IssueModel, issue_in: IssueUpdate, changed_by_id: int):
+        from app.services.notification_service import notification_service
+        from app.models.user import User as UserModel
+        
         update_data = issue_in.model_dump(exclude_unset=True)
         
-        # Handle status history if status is changing
+        # 1. NOTIFICATION FOR ASSIGNMENT
+        if "assigned_to_id" in update_data and update_data["assigned_to_id"] != db_issue.assigned_to_id:
+            new_authority_id = update_data["assigned_to_id"]
+            if new_authority_id:
+                notification_service.create_notification(
+                    db,
+                    user_id=new_authority_id,
+                    title="New Issue Assigned",
+                    message=f"Admin has assigned you a new issue: '{db_issue.title}'."
+                )
+
+        # 2. NOTIFICATION & COMMENT FOR RESOLUTION
         if "status" in update_data and update_data["status"] != db_issue.status:
             old_status = db_issue.status
             new_status = update_data["status"]
@@ -79,14 +93,37 @@ class IssueService:
             )
             db.add(history)
             
-            # NOTIFICATION
-            from app.services.notification_service import notification_service
+            # Notify owner regardless of status change
             notification_service.create_notification(
                 db, 
                 user_id=db_issue.user_id, 
                 title="Issue Status Updated", 
                 message=f"Your issue '{db_issue.title}' status changed from '{old_status}' to '{new_status}'."
             )
+            
+            # If resolved by authority, notify admins and add a comment
+            if new_status == "resolved":
+                solver = db.query(UserModel).filter(UserModel.id == changed_by_id).first()
+                if solver and solver.role in ["authority", "admin"]:
+                    # Notify Admins
+                    admins = db.query(UserModel).filter(UserModel.role == "admin").all()
+                    for admin in admins:
+                        if admin.id != changed_by_id: # Don't notify the one who resolved it
+                            notification_service.create_notification(
+                                db,
+                                user_id=admin.id,
+                                title=f"Issue Resolved by {solver.role.capitalize()}",
+                                message=f"Issue '{db_issue.title}' has been marked as resolved by {solver.full_name}."
+                            )
+                    
+                    # Add comment automatically
+                    from app.models.comment import Comment as CommentModel
+                    res_comment = CommentModel(
+                        issue_id=db_issue.id,
+                        user_id=changed_by_id,
+                        content=f"✅ AUTOMATED: This issue was marked as RESOLVED by {solver.role.capitalize()} ({solver.full_name})."
+                    )
+                    db.add(res_comment)
         
         for field in update_data:
             setattr(db_issue, field, update_data[field])

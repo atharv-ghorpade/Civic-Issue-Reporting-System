@@ -5,6 +5,8 @@ from app.routers.deps import get_db, get_current_active_user
 from app.schemas.issue_schema import Issue, IssueCreate, IssueUpdate, StatusUpdate, IssueStatusHistory
 from app.services.issue_service import issue_service
 from app.models.user import User as UserModel
+import os
+import uuid
 
 router = APIRouter()
 
@@ -180,10 +182,6 @@ def assign_issue(
     return issue_service.update_issue(db, db_issue, IssueUpdate(assigned_to_id=assigned_to_id), current_admin.id)
 
 # --- Images ---
-from fastapi import File, UploadFile
-import os
-import uuid
-
 @router.post("/{id}/images")
 async def upload_issue_image(
     id: int,

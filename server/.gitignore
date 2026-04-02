@@ -184,3 +184,5 @@ node_modules/
 full_err.txt
 uploads/
 *.db
+.env
+.env.*
